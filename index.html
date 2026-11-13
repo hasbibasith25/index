@@ -510,6 +510,13 @@ function App() {
     };
 
     setTransactions([item, ...transactions]);
+    // ---- TAMBAHKAN KODE INI UNTUK KIRIM KE GOOGLE SHEETS ----
+    // Ganti tulisan URL_APPS_SCRIPT_ANDA dengan URL panjang yang Anda copy di Langkah 2
+    fetch("https://script.google.com/macros/s/AKfycbx8FCxHFf3fNecT0KbgEw52BntUND6XfUtfiY1xenSeeDWQBAaiItitiMfHufvZBbfX/exec", {
+      method: "POST",
+      body: JSON.stringify(item)
+    }).catch(error => console.log("Gagal kirim ke Google Sheets:", error));
+    // ---------------------------------------------------------
     setNewTx({
       ...newTx,
       amount: '',

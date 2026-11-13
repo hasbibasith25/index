@@ -1,1 +1,2809 @@
 # index
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinFreedom 45 - Aplikasi Siap Pakai</title>
+    <!-- Memuat Tailwind CSS untuk desain -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat Babel agar script React bisa jalan di dalam HTML -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* Agar scrollbar lebih mulus dan modern */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Menjalankan logika React + Module ESM CDN -->
+    <script type="text/babel" data-type="module">
+import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18';
+import { createRoot } from 'https://esm.sh/react-dom@18/client';
+import {
+  Wallet, TrendingUp, TrendingDown, PiggyBank, Target, PlusCircle, Trash2, Calendar,
+  ArrowUpRight, ArrowDownRight, Award, AlertCircle, CheckCircle2, PieChart as PieChartIcon,
+  BarChart3, Settings, RefreshCw, Landmark, Building2, ShieldCheck, Sparkles, ChevronRight,
+  Edit3, Download, FileSpreadsheet, Printer, Rocket, Copy, Check, Smartphone, Globe,
+  Terminal, Plus, X, Save, FolderPlus, Upload, FileText
+} from 'https://esm.sh/lucide-react@0.292.0?deps=react@18';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, BarChart, Bar, Legend
+} from 'https://esm.sh/recharts@2.10.3?deps=react@18,react-dom@18';
+
+
+// --- HELPER FORMATTERS ---
+const formatRupiah = (number) => {
+  if (number === undefined || number === null || isNaN(number)) return 'Rp 0';
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(number);
+};
+
+const formatCompactRupiah = (number) => {
+  if (number === undefined || number === null || isNaN(number)) return 'Rp 0';
+  const absNum = Math.abs(number);
+  if (absNum >= 1_000_000_000) {
+    return `Rp ${(number / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 2 })} Miliar`;
+  }
+  if (absNum >= 1_000_000) {
+    return `Rp ${(number / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} Juta`;
+  }
+  return formatRupiah(number);
+};
+
+// --- DATA KATEGORI & NILAI AWAL (RESET KE 0) ---
+const DEFAULT_CATEGORIES = {
+  income: ['Gaji Utama', 'Bonus & THR', 'Dividen & Kupon', 'Pendapatan Kos/Properti', 'Freelance / Sampingan'],
+  expense: [
+    'Kebutuhan Rumah & Keluarga',
+    'Makan & Kuliner',
+    'Transportasi & BBM',
+    'Tagihan, Listrik & Internet',
+    'Olahraga & Hobi',
+    'Kesehatan & Asuransi',
+    'Pendidikan & Anak',
+    'Hiburan & Liburan'
+  ],
+  investment: [
+    'Reksa Dana & Obligasi',
+    'Saham Bluechip / Dividen',
+    'Tabungan Properti / Kos-kosan',
+    'Dana Darurat & Emas',
+    'DPLK / Dana Pensiun'
+  ]
+};
+
+const COLORS = ['#10b981', '#2563eb', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e', '#64748b'];
+
+// Riwayat transaksi awal dikosongkan (Rp 0)
+const INITIAL_TRANSACTIONS = [];
+
+// Kantong aset awal di-reset ke Rp 0
+const INITIAL_GOALS = [
+  {
+    id: 'g1',
+    name: 'Dana Darurat Keluarga & Emas',
+    category: 'Dana Darurat & Emas',
+    currentBase: 0,
+    target: 0,
+    monthlyPlan: 0,
+    icon: 'shield'
+  },
+  {
+    id: 'g2',
+    name: 'Portofolio Saham & Reksa Dana',
+    category: 'Saham Bluechip / Dividen',
+    currentBase: 0,
+    target: 0,
+    monthlyPlan: 0,
+    icon: 'trending'
+  },
+  {
+    id: 'g3',
+    name: 'Akuisisi Properti / Kos-kosan',
+    category: 'Tabungan Properti / Kos-kosan',
+    currentBase: 0,
+    target: 0,
+    monthlyPlan: 0,
+    icon: 'building'
+  },
+  {
+    id: 'g4',
+    name: 'DPLK & Obligasi Negara (SBN)',
+    category: 'Reksa Dana & Obligasi',
+    currentBase: 0,
+    target: 0,
+    monthlyPlan: 0,
+    icon: 'landmark'
+  }
+];
+
+// Konfigurasi nilai finansial awal di-reset ke 0
+const INITIAL_FIRE_CONFIG = {
+  currentAge: 33,
+  targetAge: 45,
+  monthlyRetirementExpense: 0,
+  safeWithdrawalRate: 4.0,
+  expectedAnnualReturn: 11.0,
+  inflationRate: 3.5,
+  useCustomTarget: false,
+  customFireTarget: 0,
+  syncPortfolioFromBuckets: true,
+  manualInitialPortfolio: 0,
+  monthlyContributionPlan: 0,
+  syncWithActualInvestment: true
+};
+
+// --- LAUNCH SCRIPTS DATA ---
+const LAUNCH_SCRIPTS = {
+  viteSetup: `# 1. Buat project React + Vite baru
+npm create vite@latest finfreedom-45 -- --template react
+cd finfreedom-45
+
+# 2. Install library ikon & grafik yang dibutuhkan
+npm install lucide-react recharts
+
+# 3. Install Tailwind CSS
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+
+# 4. Jalankan server development lokal
+npm run dev`,
+
+  vercelDeploy: `# 1. Install Vercel CLI secara global
+npm install -g vercel
+
+# 2. Build project untuk production
+npm run build
+
+# 3. Deploy langsung ke Cloud (Gratis HTTPS & Custom Domain)
+vercel --prod`,
+
+  capacitorApk: `# 1. Install Capacitor Core, CLI, dan platform Android
+npm install @capacitor/core @capacitor/cli @capacitor/android
+
+# 2. Inisialisasi konfigurasi aplikasi Android
+npx cap init "FinFreedom 45" "id.finfreedom45.app" --web-dir dist
+
+# 3. Build web bundle React terlebih dahulu
+npm run build
+
+# 4. Tambahkan project native Android & sinkronkan aset
+npx cap add android
+npx cap sync android
+
+# 5. Buka di Android Studio untuk Build APK / AAB (Siap rilis Play Store)
+npx cap open android`,
+
+  pwaManifest: `{
+  "short_name": "FinFreedom45",
+  "name": "FinFreedom 45 - Keuangan & Investasi",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f8fafc",
+  "theme_color": "#10b981",
+  "display": "standalone",
+  "orientation": "portrait"
+}`
+};
+
+function App() {
+  // --- STATE MANAGEMENT ---
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const [categories, setCategories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ff45_v3_categories');
+      return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    } catch {
+      return DEFAULT_CATEGORIES;
+    }
+  });
+
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ff45_v3_transactions');
+      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    } catch {
+      return INITIAL_TRANSACTIONS;
+    }
+  });
+
+  const [fireConfig, setFireConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ff45_v3_config');
+      return saved ? { ...INITIAL_FIRE_CONFIG, ...JSON.parse(saved) } : INITIAL_FIRE_CONFIG;
+    } catch {
+      return INITIAL_FIRE_CONFIG;
+    }
+  });
+
+  const [goals, setGoals] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ff45_v3_goals');
+      return saved ? JSON.parse(saved) : INITIAL_GOALS;
+    } catch {
+      return INITIAL_GOALS;
+    }
+  });
+
+  // Form State untuk Transaksi Baru
+  const [newTx, setNewTx] = useState({
+    date: new Date().toISOString().split('T')[0],
+    type: 'expense',
+    category: DEFAULT_CATEGORIES.expense[0],
+    amount: '',
+    note: ''
+  });
+
+  // State Edit Transaksi
+  const [editingTx, setEditingTx] = useState(null);
+
+  // State Tambah Kategori Baru
+  const [newCatName, setNewCatName] = useState('');
+  const [showAddCat, setShowAddCat] = useState(false);
+
+  // Filter State untuk Riwayat Transaksi
+  const [filterType, setFilterType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [notification, setNotification] = useState(null);
+
+  // Modal Tambah/Edit Kantong Aset (Goals)
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [goalForm, setGoalForm] = useState({
+    id: null,
+    name: '',
+    category: 'Saham Bluechip / Dividen',
+    currentBase: '',
+    target: '',
+    monthlyPlan: '',
+    icon: 'trending'
+  });
+
+  // Modal Quick Edit Target & Aset di Banner Atas
+  const [quickEditModalOpen, setQuickEditModalOpen] = useState(false);
+
+  // Modal Print Preview Laporan PDF
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+
+  // Copy state untuk tab Go Launch
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  // Simpan ke LocalStorage setiap ada perubahan
+  useEffect(() => {
+    try {
+      localStorage.setItem('ff45_v3_categories', JSON.stringify(categories));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [categories]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ff45_v3_transactions', JSON.stringify(transactions));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [transactions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ff45_v3_config', JSON.stringify(fireConfig));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [fireConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ff45_v3_goals', JSON.stringify(goals));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [goals]);
+
+  const showToast = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3200);
+  };
+
+  // --- PERHITUNGAN RINGKASAN ARUS KAS ---
+  const cashflowSummary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    let investment = 0;
+    const expenseByCategory = {};
+    const investmentByCategory = {};
+
+    transactions.forEach((tx) => {
+      const amt = Number(tx.amount) || 0;
+      if (tx.type === 'income') {
+        income += amt;
+      } else if (tx.type === 'expense') {
+        expense += amt;
+        expenseByCategory[tx.category] = (expenseByCategory[tx.category] || 0) + amt;
+      } else if (tx.type === 'investment') {
+        investment += amt;
+        investmentByCategory[tx.category] = (investmentByCategory[tx.category] || 0) + amt;
+      }
+    });
+
+    const netCashRest = income - expense - investment;
+    const totalSavedAndInvested = investment + Math.max(0, netCashRest);
+    const savingsRate = income > 0 ? ((income - expense) / income) * 100 : 0;
+    const investmentRate = income > 0 ? (investment / income) * 100 : 0;
+
+    const expenseChartData = Object.entries(expenseByCategory)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return {
+      income,
+      expense,
+      investment,
+      netCashRest,
+      totalSavedAndInvested,
+      savingsRate: Math.max(0, savingsRate),
+      investmentRate,
+      expenseChartData,
+      investmentByCategory
+    };
+  }, [transactions]);
+
+  // --- TOTAL SALDO AWAL DARI KANTONG ASET ---
+  const bucketsTotals = useMemo(() => {
+    const totalBase = goals.reduce((acc, g) => acc + (Number(g.currentBase) || 0), 0);
+    const totalTarget = goals.reduce((acc, g) => acc + (Number(g.target) || 0), 0);
+    const totalMonthlyPlan = goals.reduce((acc, g) => acc + (Number(g.monthlyPlan) || 0), 0);
+    return { totalBase, totalTarget, totalMonthlyPlan };
+  }, [goals]);
+
+  // --- PERHITUNGAN KALKULATOR FINANCIAL FREEDOM (USIA 45) ---
+  const fireAnalysis = useMemo(() => {
+    const yearsToGrow = Math.max(1, Number(fireConfig.targetAge) - Number(fireConfig.currentAge));
+    const monthsToGrow = yearsToGrow * 12;
+
+    // Aset dasar: bisa sinkron otomatis dari total Kantong Aset atau input manual
+    const basePortfolio = fireConfig.syncPortfolioFromBuckets
+      ? bucketsTotals.totalBase
+      : Number(fireConfig.manualInitialPortfolio) || 0;
+
+    const currentTotalInvested =
+      basePortfolio + (fireConfig.syncWithActualInvestment ? cashflowSummary.investment : 0);
+
+    const annualExpenseToday = (Number(fireConfig.monthlyRetirementExpense) || 0) * 12;
+    const swrDecimal = Math.max(0.01, (Number(fireConfig.safeWithdrawalRate) || 4) / 100);
+
+    // Target FIRE Number: Otomatis dari 25x pengeluaran (SWR) ATAU Manual Custom Target
+    const calculatedFireTarget = annualExpenseToday / swrDecimal;
+    const fireNumberTarget = fireConfig.useCustomTarget
+      ? Math.max(0, Number(fireConfig.customFireTarget) || 0)
+      : calculatedFireTarget;
+
+    const netAnnualReturnPct = Math.max(
+      0.1,
+      Number(fireConfig.expectedAnnualReturn) - Number(fireConfig.inflationRate)
+    );
+    const monthlyRate = netAnnualReturnPct / 100 / 12;
+    const monthlyContribution = Number(fireConfig.monthlyContributionPlan) || 0;
+
+    const projectionData = [];
+    let balance = currentTotalInvested;
+    let totalPrincipal = currentTotalInvested;
+
+    for (let yr = 0; yr <= yearsToGrow; yr++) {
+      const age = Number(fireConfig.currentAge) + yr;
+      projectionData.push({
+        age: `Usia ${age}`,
+        ageNum: age,
+        totalAset: Math.round(balance),
+        modalPokok: Math.round(totalPrincipal),
+        targetFIRE: Math.round(fireNumberTarget)
+      });
+
+      for (let m = 0; m < 12; m++) {
+        balance = balance * (1 + monthlyRate) + monthlyContribution;
+        totalPrincipal += monthlyContribution;
+      }
+    }
+
+    const projectedAtTargetAge =
+      projectionData[projectionData.length - 1]?.totalAset || currentTotalInvested;
+    const isOnTrack = fireNumberTarget > 0 && projectedAtTargetAge >= fireNumberTarget;
+    const progressPercentage =
+      fireNumberTarget > 0 ? Math.min(100, (currentTotalInvested / fireNumberTarget) * 100) : 0;
+    const projectedAchievementPct =
+      fireNumberTarget > 0 ? (projectedAtTargetAge / fireNumberTarget) * 100 : 0;
+
+    const compoundFactor = Math.pow(1 + monthlyRate, monthsToGrow);
+    const futureValueOfCurrent = currentTotalInvested * compoundFactor;
+    const remainingNeededAtTarget = Math.max(0, fireNumberTarget - futureValueOfCurrent);
+
+    let requiredMonthlyContribution = 0;
+    if (remainingNeededAtTarget > 0 && monthlyRate > 0) {
+      requiredMonthlyContribution =
+        remainingNeededAtTarget / ((compoundFactor - 1) / monthlyRate);
+    }
+
+    const monthlyShortfall = Math.max(0, requiredMonthlyContribution - monthlyContribution);
+    const estimatedMonthlyPassiveIncome = (projectedAtTargetAge * swrDecimal) / 12;
+
+    return {
+      yearsToGrow,
+      basePortfolio,
+      currentTotalInvested,
+      calculatedFireTarget,
+      fireNumberTarget,
+      netAnnualReturnPct,
+      projectedAtTargetAge,
+      isOnTrack,
+      progressPercentage,
+      projectedAchievementPct,
+      requiredMonthlyContribution,
+      monthlyShortfall,
+      estimatedMonthlyPassiveIncome,
+      projectionData
+    };
+  }, [fireConfig, cashflowSummary.investment, bucketsTotals.totalBase]);
+
+  // --- HANDLERS TRANSAKSI & KATEGORI ---
+  const handleTypeChange = (type) => {
+    setNewTx({
+      ...newTx,
+      type,
+      category: categories[type]?.[0] || ''
+    });
+  };
+
+  const handleAddCategory = () => {
+    const trimmed = newCatName.trim();
+    if (!trimmed) return;
+    const currentList = categories[newTx.type] || [];
+    if (!currentList.includes(trimmed)) {
+      const updated = {
+        ...categories,
+        [newTx.type]: [...currentList, trimmed]
+      };
+      setCategories(updated);
+      setNewTx({ ...newTx, category: trimmed });
+      showToast(`Kategori "${trimmed}" ditambahkan!`);
+    }
+    setNewCatName('');
+    setShowAddCat(false);
+  };
+
+  const handleAddTransaction = (e) => {
+    e.preventDefault();
+    const numericAmount = Number(String(newTx.amount).replace(/[^0-9]/g, ''));
+    if (!numericAmount || numericAmount <= 0) {
+      showToast('Masukkan nominal transaksi dalam Rupiah yang valid.');
+      return;
+    }
+
+    const item = {
+      id: `tx_${Date.now()}`,
+      date: newTx.date,
+      type: newTx.type,
+      category: newTx.category,
+      amount: numericAmount,
+      note: newTx.note.trim() || newTx.category
+    };
+
+    setTransactions([item, ...transactions]);
+    setNewTx({
+      ...newTx,
+      amount: '',
+      note: ''
+    });
+    showToast('Transaksi berhasil dicatat!');
+  };
+
+  const handleSaveEditTx = (e) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    const numericAmount = Number(editingTx.amount) || 0;
+    if (numericAmount <= 0) {
+      showToast('Nominal harus lebih dari 0');
+      return;
+    }
+    setTransactions(
+      transactions.map((t) =>
+        t.id === editingTx.id
+          ? { ...editingTx, amount: numericAmount, note: editingTx.note.trim() || editingTx.category }
+          : t
+      )
+    );
+    setEditingTx(null);
+    showToast('Perubahan transaksi berhasil disimpan!');
+  };
+
+  const handleDeleteTransaction = (id) => {
+    setTransactions(transactions.filter((t) => t.id !== id));
+    showToast('Transaksi dihapus.');
+  };
+
+  // --- HANDLERS KANTONG ASET (CRUD GOALS) ---
+  const openAddGoalModal = () => {
+    setGoalForm({
+      id: null,
+      name: '',
+      category: categories.investment[0] || 'Saham Bluechip / Dividen',
+      currentBase: '',
+      target: '',
+      monthlyPlan: '',
+      icon: 'trending'
+    });
+    setGoalModalOpen(true);
+  };
+
+  const openEditGoalModal = (goal) => {
+    setGoalForm({
+      id: goal.id,
+      name: goal.name,
+      category: goal.category,
+      currentBase: String(goal.currentBase),
+      target: String(goal.target),
+      monthlyPlan: String(goal.monthlyPlan || 0),
+      icon: goal.icon || 'trending'
+    });
+    setGoalModalOpen(true);
+  };
+
+  const handleSaveGoalForm = (e) => {
+    e.preventDefault();
+    if (!goalForm.name.trim()) {
+      showToast('Nama kantong aset wajib diisi.');
+      return;
+    }
+    const payload = {
+      id: goalForm.id || `g_${Date.now()}`,
+      name: goalForm.name.trim(),
+      category: goalForm.category,
+      currentBase: Math.max(0, Number(goalForm.currentBase) || 0),
+      target: Math.max(0, Number(goalForm.target) || 0),
+      monthlyPlan: Math.max(0, Number(goalForm.monthlyPlan) || 0),
+      icon: goalForm.icon
+    };
+
+    if (goalForm.id) {
+      setGoals(goals.map((g) => (g.id === goalForm.id ? payload : g)));
+      showToast('Kantong aset berhasil diperbarui!');
+    } else {
+      setGoals([...goals, payload]);
+      showToast('Kantong aset baru berhasil ditambahkan!');
+    }
+    setGoalModalOpen(false);
+  };
+
+  const handleDeleteGoal = (id) => {
+    setGoals(goals.filter((g) => g.id !== id));
+    showToast('Kantong aset dihapus.');
+  };
+
+  // --- HANDLERS EXPORT SPREADSHEET (CSV & EXCEL .XLS) & JSON ---
+  const handleExportCSV = () => {
+    const rows = [
+      ['LAPORAN KEUANGAN & PETA JALAN FINANCIAL FREEDOM USIA ' + fireConfig.targetAge],
+      ['Tanggal Ekspor', new Date().toISOString().split('T')[0]],
+      [],
+      ['1. RINGKASAN TARGET FINANCIAL FREEDOM'],
+      ['Usia Saat Ini', fireConfig.currentAge + ' Tahun'],
+      ['Target Usia Merdeka', fireConfig.targetAge + ' Tahun'],
+      ['Target Dana Financial Freedom (FIRE Number)', fireAnalysis.fireNumberTarget],
+      ['Total Aset Investasi Saat Ini', fireAnalysis.currentTotalInvested],
+      ['Proyeksi Aset di Usia ' + fireConfig.targetAge, fireAnalysis.projectedAtTargetAge],
+      ['Progress Saat Ini (%)', fireAnalysis.progressPercentage.toFixed(2) + '%'],
+      ['Status', fireAnalysis.isOnTrack ? 'ON TRACK' : 'PERLU TAMBAHAN SETORAN'],
+      [],
+      ['2. RINGKASAN ARUS KAS (CASHFLOW)'],
+      ['Total Pemasukan', cashflowSummary.income],
+      ['Total Pengeluaran', cashflowSummary.expense],
+      ['Total Alokasi Investasi', cashflowSummary.investment],
+      ['Sisa Kas Bebas', cashflowSummary.netCashRest],
+      ['Savings Rate (%)', cashflowSummary.savingsRate.toFixed(2) + '%'],
+      [],
+      ['3. DAFTAR KANTONG ASET & PORTOFOLIO INVESTASI'],
+      ['Nama Kantong Aset', 'Kategori Terkait', 'Aset Saat Ini (Saldo Awal)', 'Tambahan Bulan Ini', 'Total Terkumpul', 'Target Goal', 'Progress (%)'],
+      ...goals.map((g) => {
+        const added = cashflowSummary.investmentByCategory[g.category] || 0;
+        const total = (Number(g.currentBase) || 0) + added;
+        const pct = (Number(g.target) > 0 ? (total / Number(g.target)) * 100 : 0).toFixed(2) + '%';
+        return [g.name, g.category, g.currentBase, added, total, g.target, pct];
+      }),
+      [],
+      ['4. RIWAYAT TRANSAKSI HARIAN'],
+      ['Tanggal', 'Tipe', 'Kategori', 'Catatan / Keterangan', 'Nominal (Rp)'],
+      ...transactions.map((t) => [
+        t.date,
+        t.type === 'income' ? 'Pemasukan' : t.type === 'investment' ? 'Investasi' : 'Pengeluaran',
+        t.category,
+        `"${(t.note || '').replace(/"/g, '""')}"`,
+        t.amount
+      ])
+    ];
+
+    const csvContent = '\uFEFF' + rows.map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `FinFreedom45_Data_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('File CSV berhasil diunduh (Siap dibuka di Excel/Google Sheets)!');
+  };
+
+  const handleExportExcelXLS = () => {
+    const htmlTable = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="UTF-8"></head>
+      <body>
+        <h2>LAPORAN KEUANGAN & ROADMAP FINANCIAL FREEDOM USIA ${fireConfig.targetAge}</h2>
+        <p>Diekspor pada: ${new Date().toLocaleDateString('id-ID')}</p>
+        <h3>A. Ringkasan Financial Freedom & Arus Kas</h3>
+        <table border="1" cellpadding="6" cellspacing="0">
+          <tr style="background:#10b981;color:#ffffff;font-weight:bold;">
+            <th>Indikator Keuangan</th><th>Nilai / Nominal</th>
+          </tr>
+          <tr><td>Usia Saat Ini -> Target Usia</td><td>${fireConfig.currentAge} -> ${fireConfig.targetAge} Tahun (${fireAnalysis.yearsToGrow} Tahun)</td></tr>
+          <tr><td>Target Dana Pensiun Merdeka (FIRE Number)</td><td>${formatRupiah(fireAnalysis.fireNumberTarget)}</td></tr>
+          <tr><td>Total Aset Investasi Saat Ini</td><td>${formatRupiah(fireAnalysis.currentTotalInvested)} (${fireAnalysis.progressPercentage.toFixed(1)}%)</td></tr>
+          <tr><td>Proyeksi Aset di Usia ${fireConfig.targetAge}</td><td>${formatRupiah(fireAnalysis.projectedAtTargetAge)}</td></tr>
+          <tr><td>Total Pemasukan Tercatat</td><td>${formatRupiah(cashflowSummary.income)}</td></tr>
+          <tr><td>Total Pengeluaran Tercatat</td><td>${formatRupiah(cashflowSummary.expense)}</td></tr>
+          <tr><td>Total Alokasi Investasi</td><td>${formatRupiah(cashflowSummary.investment)}</td></tr>
+          <tr><td>Sisa Kas & Savings Rate</td><td>${formatRupiah(cashflowSummary.netCashRest)} (${cashflowSummary.savingsRate.toFixed(1)}%)</td></tr>
+        </table>
+        <br/>
+        <h3>B. Portofolio Kantong Aset & Target Investasi</h3>
+        <table border="1" cellpadding="6" cellspacing="0">
+          <tr style="background:#2563eb;color:#ffffff;font-weight:bold;">
+            <th>Nama Kantong Aset</th><th>Kategori</th><th>Aset Awal</th><th>Top-Up Bulan Ini</th><th>Total Aset</th><th>Target Akhir</th><th>Progress</th>
+          </tr>
+          ${goals
+            .map((g) => {
+              const added = cashflowSummary.investmentByCategory[g.category] || 0;
+              const total = (Number(g.currentBase) || 0) + added;
+              const pct = (Number(g.target) > 0 ? (total / Number(g.target)) * 100 : 0).toFixed(1);
+              return `<tr>
+                <td>${g.name}</td>
+                <td>${g.category}</td>
+                <td>${g.currentBase}</td>
+                <td>${added}</td>
+                <td><b>${total}</b></td>
+                <td>${g.target}</td>
+                <td>${pct}%</td>
+              </tr>`;
+            })
+            .join('')}
+        </table>
+        <br/>
+        <h3>C. Riwayat Transaksi Harian</h3>
+        <table border="1" cellpadding="6" cellspacing="0">
+          <tr style="background:#0f172a;color:#ffffff;font-weight:bold;">
+            <th>Tanggal</th><th>Tipe</th><th>Kategori</th><th>Keterangan</th><th>Nominal (Rp)</th>
+          </tr>
+          ${transactions
+            .map(
+              (t) => `<tr>
+                <td>${t.date}</td>
+                <td>${t.type === 'income' ? 'Pemasukan' : t.type === 'investment' ? 'Investasi' : 'Pengeluaran'}</td>
+                <td>${t.category}</td>
+                <td>${t.note}</td>
+                <td>${t.amount}</td>
+              </tr>`
+            )
+            .join('')}
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `FinFreedom45_Spreadsheet_${new Date().toISOString().slice(0, 10)}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('File Excel (.xls) lengkap dengan tabel rapi berhasil diunduh!');
+  };
+
+  const handleExportJSONBackup = () => {
+    const backup = {
+      version: '3.0',
+      exportedAt: new Date().toISOString(),
+      fireConfig,
+      goals,
+      transactions,
+      categories
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FinFreedom45_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    showToast('File Backup JSON berhasil disimpan!');
+  };
+
+  const handleImportJSONBackup = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (parsed.fireConfig) setFireConfig(parsed.fireConfig);
+        if (parsed.goals) setGoals(parsed.goals);
+        if (parsed.transactions) setTransactions(parsed.transactions);
+        if (parsed.categories) setCategories(parsed.categories);
+        showToast('Data backup berhasil dipulihkan!');
+      } catch {
+        showToast('Format file backup JSON tidak valid.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCopyScript = (key, text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    showToast('Script berhasil disalin ke Clipboard!');
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const handleResetDemoData = () => {
+    setTransactions(INITIAL_TRANSACTIONS);
+    setFireConfig(INITIAL_FIRE_CONFIG);
+    setGoals(INITIAL_GOALS);
+    setCategories(DEFAULT_CATEGORIES);
+    try {
+      localStorage.removeItem('ff45_v3_transactions');
+      localStorage.removeItem('ff45_v3_config');
+      localStorage.removeItem('ff45_v3_goals');
+      localStorage.removeItem('ff45_v3_categories');
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Seluruh nilai telah di-reset kembali ke Rp 0.');
+  };
+
+  // Filtered Transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const matchType = filterType === 'all' || tx.type === filterType;
+      const matchQuery =
+        tx.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tx.note.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchType && matchQuery;
+    });
+  }, [transactions, filterType, searchQuery]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-emerald-500 selection:text-white">
+      {/* CSS Khusus untuk Print PDF A4 Rapi */}
+      <style>{`
+        @media print {
+          body { background: #ffffff !important; color: #0f172a !important; }
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          .print-break-inside { break-inside: avoid; }
+        }
+      `}</style>
+
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-emerald-500 animate-bounce no-print">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-semibold">{notification}</span>
+        </div>
+      )}
+
+      {/* Header / Navbar Cerah */}
+      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/90 border-b border-slate-200 shadow-sm no-print">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/25">
+                <Landmark className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-extrabold tracking-tight text-slate-900">
+                    FinFreedom <span className="text-emerald-600">{fireConfig.targetAge}</span>
+                  </h1>
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    Pro Edition
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Monitoring Cashflow, Portofolio Aset & Peta Jalan Pensiun Merdeka Usia {fireConfig.targetAge}
+                </p>
+              </div>
+            </div>
+
+            {/* Tombol Export Cepat di Mobile */}
+            <div className="flex items-center gap-1.5 lg:hidden">
+              <button
+                onClick={handleExportExcelXLS}
+                title="Download Excel (.xls)"
+                className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setReportModalOpen(true)}
+                title="Cetak / Simpan PDF"
+                className="p-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Navigation Tabs & Action Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto max-w-full">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'dashboard'
+                    ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 text-emerald-600" />
+                <span>Dashboard & Aset</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('cashflow')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'cashflow'
+                    ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <Wallet className="w-4 h-4 text-blue-600" />
+                <span>Catat & Edit Transaksi</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('fire')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'fire'
+                    ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <Target className="w-4 h-4 text-amber-500" />
+                <span>Kalkulator Usia {fireConfig.targetAge}</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('launch')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'launch'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <Rocket className="w-4 h-4" />
+                <span>Go Launch (Web & APK)</span>
+              </button>
+            </div>
+
+            {/* Export & Print Toolbar Desktop */}
+            <div className="hidden lg:flex items-center gap-2">
+              <button
+                onClick={handleExportExcelXLS}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
+                title="Ekspor Tabel ke Microsoft Excel (.xls)"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Excel / CSV</span>
+              </button>
+              <button
+                onClick={() => setReportModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
+                title="Laporan Siap Cetak / Simpan PDF"
+              >
+                <Printer className="w-4 h-4" />
+                <span>PDF Report</span>
+              </button>
+              <button
+                onClick={handleResetDemoData}
+                title="Reset Semua Nilai ke 0"
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 no-print">
+        {/* BANNER PROGRESS FINANCIAL FREEDOM USIA 45 */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-600 to-sky-700 text-white p-5 sm:p-7 shadow-lg shadow-emerald-900/10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2.5 max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-white text-xs font-semibold">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Road to Financial Freedom • Usia {fireConfig.currentAge} → {fireConfig.targetAge} Tahun ({fireAnalysis.yearsToGrow} Thn Lagi)</span>
+                </span>
+                <button
+                  onClick={() => setQuickEditModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-bold shadow-sm transition-all"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Target & Aset Saat Ini</span>
+                </button>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                Target Dana Merdeka: <span className="text-amber-300 underline decoration-amber-300/40 decoration-wavy underline-offset-4">{formatCompactRupiah(fireAnalysis.fireNumberTarget)}</span>
+              </h2>
+
+              <p className="text-xs sm:text-sm text-emerald-50 leading-relaxed">
+                {fireConfig.useCustomTarget ? (
+                  <>Menggunakan <strong>Target Manual Kustom</strong> sebesar {formatRupiah(fireAnalysis.fireNumberTarget)}. </>
+                ) : (
+                  <>Berdasarkan target biaya hidup pensiun <strong>{formatRupiah(fireConfig.monthlyRetirementExpense)}/bulan</strong> (Aturan SWR {fireConfig.safeWithdrawalRate}%). </>
+                )}
+                Saat ini total aset investasi Anda mencapai <strong>{fireAnalysis.progressPercentage.toFixed(1)}%</strong> dari target.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              {/* Kotak Aset Saat Ini */}
+              <div
+                onClick={() => setQuickEditModalOpen(true)}
+                className="cursor-pointer group bg-white/15 hover:bg-white/20 backdrop-blur-md border border-white/25 rounded-2xl p-4 min-w-[200px] transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-100 font-medium">Total Aset Saat Ini</span>
+                  <Edit3 className="w-3.5 h-3.5 text-emerald-200 group-hover:text-white" />
+                </div>
+                <span className="text-xl font-extrabold text-white mt-1 block">
+                  {formatCompactRupiah(fireAnalysis.currentTotalInvested)}
+                </span>
+                <span className="text-[11px] text-amber-200 font-medium flex items-center gap-1 mt-1">
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  +{formatCompactRupiah(cashflowSummary.investment)} dari transaksi
+                </span>
+              </div>
+
+              {/* Kotak Proyeksi Usia 45 */}
+              <div
+                onClick={() => setQuickEditModalOpen(true)}
+                className="cursor-pointer group bg-white/15 hover:bg-white/20 backdrop-blur-md border border-white/25 rounded-2xl p-4 min-w-[205px] transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-100 font-medium">Proyeksi di Usia {fireConfig.targetAge} Thn</span>
+                  <Edit3 className="w-3.5 h-3.5 text-emerald-200 group-hover:text-white" />
+                </div>
+                <span className="text-xl font-extrabold text-white mt-1 block">
+                  {formatCompactRupiah(fireAnalysis.projectedAtTargetAge)}
+                </span>
+                <span className="text-[11px] flex items-center gap-1 mt-1 font-semibold">
+                  {fireAnalysis.isOnTrack ? (
+                    <span className="text-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-300" /> On Track Tercapai!
+                    </span>
+                  ) : (
+                    <span className="text-amber-200 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> Kurang {formatCompactRupiah(fireAnalysis.monthlyShortfall)}/bln
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar Visual */}
+          <div className="mt-5 space-y-2">
+            <div className="flex flex-wrap justify-between text-xs font-semibold text-emerald-50">
+              <span>
+                Terkumpul: <strong className="text-white">{formatRupiah(fireAnalysis.currentTotalInvested)}</strong> ({fireAnalysis.progressPercentage.toFixed(1)}%)
+              </span>
+              <span>
+                Target Usia {fireConfig.targetAge}: <strong className="text-amber-300">{formatRupiah(fireAnalysis.fireNumberTarget)}</strong>
+              </span>
+            </div>
+            <div className="w-full h-3.5 bg-slate-900/30 rounded-full overflow-hidden p-0.5 backdrop-blur-sm">
+              <div
+                className="h-full bg-gradient-to-r from-amber-300 via-emerald-300 to-white rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(0, fireAnalysis.progressPercentage)}%` }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ================= TAB 1: DASHBOARD & KANTONG ASET ================= */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* Baris Action Cepat: Export & Backup */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Pusat Laporan & Backup Data</h3>
+                  <p className="text-xs text-slate-500">Ekspor pencatatan ke Spreadsheet (Excel/CSV) atau cetak PDF</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleExportExcelXLS}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Download Excel (.xls)</span>
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-all"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Download .CSV</span>
+                </button>
+                <button
+                  onClick={() => setReportModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Laporan PDF / Cetak</span>
+                </button>
+                <button
+                  onClick={handleExportJSONBackup}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Backup JSON</span>
+                </button>
+                <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Restore</span>
+                  <input type="file" accept=".json" onChange={handleImportJSONBackup} className="hidden" />
+                </label>
+              </div>
+            </div>
+
+            {/* 4 Kartu Metrik Utama */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Pemasukan</span>
+                  <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-slate-900">{formatRupiah(cashflowSummary.income)}</div>
+                  <p className="text-xs text-slate-500 mt-1">Akumulasi pemasukan tercatat</p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Pengeluaran</span>
+                  <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
+                    <TrendingDown className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-slate-900">{formatRupiah(cashflowSummary.expense)}</div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {cashflowSummary.income > 0
+                      ? `${((cashflowSummary.expense / cashflowSummary.income) * 100).toFixed(1)}% dari pemasukan`
+                      : 'Belum ada pemasukan'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Investasi Bulan Ini</span>
+                  <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                    <PiggyBank className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-blue-600">{formatRupiah(cashflowSummary.investment)}</div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Rasio Investasi: <strong className="text-slate-700">{cashflowSummary.investmentRate.toFixed(1)}%</strong> (Rencana {formatCompactRupiah(fireConfig.monthlyContributionPlan)})
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Sisa Kas & Savings Rate</span>
+                  <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                    <Award className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-extrabold text-emerald-600">
+                      {cashflowSummary.savingsRate.toFixed(1)}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Savings Rate</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Sisa Kas Bebas: <strong className={cashflowSummary.netCashRest >= 0 ? 'text-slate-800' : 'text-rose-600'}>{formatRupiah(cashflowSummary.netCashRest)}</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* KANTONG ASET & PORTOFOLIO INVESTASI */}
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-emerald-600" />
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      Portofolio Aset Saat Ini & Target Kantong Investasi
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Klik <strong>Edit Aset & Target</strong> pada kartu untuk menyesuaikan nilai aset Anda saat ini, atau tambah instrumen investasi baru.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    onClick={() => setQuickEditModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-all"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Pengaturan Target Utama</span>
+                  </button>
+                  <button
+                    onClick={openAddGoalModal}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Kantong Aset</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {goals.map((goal) => {
+                  const addedFromTx = cashflowSummary.investmentByCategory[goal.category] || 0;
+                  const totalCurrent = (Number(goal.currentBase) || 0) + addedFromTx;
+                  const pct =
+                    Number(goal.target) > 0
+                      ? Math.min(100, (totalCurrent / Number(goal.target)) * 100)
+                      : 0;
+
+                  return (
+                    <div
+                      key={goal.id}
+                      className="bg-slate-50/70 hover:bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between transition-all hover:shadow-md"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2.5 rounded-xl bg-emerald-100/80 text-emerald-700 shrink-0">
+                              {goal.icon === 'shield' && <ShieldCheck className="w-5 h-5" />}
+                              {goal.icon === 'trending' && <TrendingUp className="w-5 h-5" />}
+                              {goal.icon === 'building' && <Building2 className="w-5 h-5" />}
+                              {goal.icon === 'landmark' && <Landmark className="w-5 h-5" />}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-900 leading-snug">{goal.name}</h4>
+                              <span className="text-[11px] text-slate-500 block mt-0.5">{goal.category}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                            <span className="text-[11px] text-slate-400 font-medium block">Total Aset Saat Ini</span>
+                            <div className="text-lg font-extrabold text-slate-900 mt-0.5">
+                              {formatRupiah(totalCurrent)}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 flex justify-between">
+                              <span>Saldo Awal: {formatCompactRupiah(goal.currentBase)}</span>
+                              {addedFromTx > 0 && (
+                                <span className="text-emerald-600 font-semibold">+{formatCompactRupiah(addedFromTx)}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs pt-1">
+                            <span className="text-slate-500">Target Kantong:</span>
+                            <span className="font-bold text-slate-800">{formatCompactRupiah(goal.target)}</span>
+                          </div>
+
+                          <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(0, pct)}%` }}
+                            />
+                          </div>
+
+                          <div className="flex justify-between text-[11px] text-slate-500">
+                            <span>Rencana: {formatCompactRupiah(goal.monthlyPlan || 0)}/bln</span>
+                            <span className="font-bold text-emerald-700">{pct.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => openEditGoalModal(goal)}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit Aset & Target</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGoal(goal.id)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Hapus Kantong Aset"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Grafik Proyeksi & Breakdown Pengeluaran */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Grafik Proyeksi Menuju Usia 45 */}
+              <div className="lg:col-span-7 bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                      Proyeksi Pertumbuhan Aset (Usia {fireConfig.currentAge} - {fireConfig.targetAge})
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Simulasi efek compounding bersih ({fireAnalysis.netAnnualReturnPct.toFixed(1)}%/thn di atas inflasi)
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('fire')}
+                    className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 self-start sm:self-auto"
+                  >
+                    <span>Sesuaikan Parameter</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={fireAnalysis.projectionData} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorAsetLight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="colorPokokLight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="age" stroke="#64748b" fontSize={11} />
+                      <YAxis
+                        stroke="#64748b"
+                        fontSize={11}
+                        tickFormatter={(val) => `${(val / 1_000_000_000).toFixed(1)}M`}
+                      />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderColor: '#cbd5e1',
+                          borderRadius: '14px',
+                          fontSize: '12px',
+                          color: '#0f172a',
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
+                        }}
+                        formatter={(value, name) => [
+                          formatRupiah(value),
+                          name === 'totalAset'
+                            ? 'Proyeksi Total Aset'
+                            : name === 'modalPokok'
+                            ? 'Akumulasi Modal Disetor'
+                            : 'Target Financial Freedom'
+                        ]}
+                      />
+                      {fireAnalysis.fireNumberTarget > 0 && (
+                        <ReferenceLine
+                          y={fireAnalysis.fireNumberTarget}
+                          stroke="#f59e0b"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          label={{
+                            value: 'Target FIRE',
+                            position: 'insideTopLeft',
+                            fill: '#d97706',
+                            fontSize: 11,
+                            fontWeight: 'bold'
+                          }}
+                        />
+                      )}
+                      <Area
+                        type="monotone"
+                        dataKey="totalAset"
+                        stroke="#059669"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorAsetLight)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="modalPokok"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorPokokLight)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>
+                      Total Nilai Portofolio
+                    </span>
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+                      Modal Pokok Disetor
+                    </span>
+                  </div>
+                  <span>
+                    Estimasi Passive Income Usia {fireConfig.targetAge}: <strong className="text-emerald-700">{formatRupiah(fireAnalysis.estimatedMonthlyPassiveIncome)}/bln</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Breakdown Pengeluaran per Kategori */}
+              <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                        <PieChartIcon className="w-5 h-5 text-rose-500" />
+                        Distribusi Pengeluaran
+                      </h3>
+                      <p className="text-xs text-slate-500">Berdasarkan kategori pengeluaran harian</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('cashflow')}
+                      className="text-xs text-emerald-700 hover:text-emerald-800 font-bold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200"
+                    >
+                      + Catat / Edit
+                    </button>
+                  </div>
+
+                  {cashflowSummary.expenseChartData.length === 0 ? (
+                    <div className="h-56 flex items-center justify-center text-slate-400 text-sm">
+                      Belum ada data pengeluaran (Rp 0).
+                    </div>
+                  ) : (
+                    <>
+                      <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={cashflowSummary.expenseChartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={48}
+                              outerRadius={75}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              {cashflowSummary.expenseChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip
+                              contentStyle={{
+                                backgroundColor: '#ffffff',
+                                borderColor: '#cbd5e1',
+                                borderRadius: '10px',
+                                fontSize: '12px'
+                              }}
+                              formatter={(val) => formatRupiah(val)}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="space-y-2 mt-2 max-h-44 overflow-y-auto pr-1">
+                        {cashflowSummary.expenseChartData.map((item, idx) => {
+                          const pct =
+                            cashflowSummary.expense > 0
+                              ? ((item.value / cashflowSummary.expense) * 100).toFixed(1)
+                              : 0;
+                          return (
+                            <div key={item.name} className="flex items-center justify-between text-xs py-0.5">
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                                />
+                                <span className="text-slate-700 font-medium truncate">{item.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-bold text-slate-900">{formatRupiah(item.value)}</span>
+                                <span className="text-slate-400 w-10 text-right">({pct}%)</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 2: PENCATATAN & EDIT TRANSAKSI HARIAN ================= */}
+        {activeTab === 'cashflow' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Form Input Cepat + Tambah Kategori */}
+            <div className="lg:col-span-4">
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm sticky top-24">
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 mb-1">
+                  <PlusCircle className="w-5 h-5 text-emerald-600" />
+                  Catat Transaksi Baru
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Catat pengeluaran, pemasukan, atau top-up investasi rutin Anda
+                </p>
+
+                <form onSubmit={handleAddTransaction} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Jenis Arus Kas</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTypeChange('expense')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                          newTx.type === 'expense'
+                            ? 'bg-rose-50 border-rose-400 text-rose-700 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Pengeluaran
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTypeChange('income')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                          newTx.type === 'income'
+                            ? 'bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Pemasukan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTypeChange('investment')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                          newTx.type === 'investment'
+                            ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Investasi
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Tanggal</label>
+                    <input
+                      type="date"
+                      value={newTx.date}
+                      onChange={(e) => setNewTx({ ...newTx, date: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">Kategori</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCat(!showAddCat)}
+                        className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5" />
+                        <span>{showAddCat ? 'Tutup' : '+ Kategori Kustom'}</span>
+                      </button>
+                    </div>
+
+                    {showAddCat && (
+                      <div className="flex gap-2 mb-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                        <input
+                          type="text"
+                          placeholder="Nama kategori baru..."
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddCategory}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                        >
+                          Tambah
+                        </button>
+                      </div>
+                    )}
+
+                    <select
+                      value={newTx.category}
+                      onChange={(e) => setNewTx({ ...newTx, category: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                    >
+                      {(categories[newTx.type] || []).map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Nominal (Rp)</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-2.5 text-sm text-slate-400 font-bold">Rp</span>
+                      <input
+                        type="number"
+                        placeholder="Contoh: 250000"
+                        value={newTx.amount}
+                        onChange={(e) => setNewTx({ ...newTx, amount: e.target.value })}
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                        required
+                      />
+                    </div>
+                    {newTx.amount > 0 && (
+                      <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">
+                        Terbaca: {formatRupiah(Number(newTx.amount))}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Catatan / Keterangan</label>
+                    <input
+                      type="text"
+                      placeholder="Misal: Belanja harian / Top up saham BBCA"
+                      value={newTx.note}
+                      onChange={(e) => setNewTx({ ...newTx, note: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Simpan Transaksi</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Tabel Riwayat, Edit Inline & Filter */}
+            <div className="lg:col-span-8 space-y-4">
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">Riwayat & Edit Transaksi Harian</h3>
+                    <p className="text-xs text-slate-500">
+                      Menampilkan {filteredTransactions.length} dari {transactions.length} transaksi • Klik ikon pensil untuk mengedit
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Cari catatan / kategori..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                    />
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="all">Semua Tipe</option>
+                      <option value="income">Pemasukan</option>
+                      <option value="expense">Pengeluaran</option>
+                      <option value="investment">Alokasi Investasi</option>
+                    </select>
+                    <button
+                      onClick={handleExportCSV}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Daftar Transaksi */}
+                <div className="space-y-2.5">
+                  {filteredTransactions.length === 0 ? (
+                    <div className="text-center py-12 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-sm">
+                      Belum ada transaksi tercatat. Silakan tambahkan transaksi baru di panel sebelah kiri.
+                    </div>
+                  ) : (
+                    filteredTransactions.map((tx) => {
+                      const isIncome = tx.type === 'income';
+                      const isInvestment = tx.type === 'investment';
+                      const isBeingEdited = editingTx?.id === tx.id;
+
+                      if (isBeingEdited) {
+                        return (
+                          <form
+                            key={tx.id}
+                            onSubmit={handleSaveEditTx}
+                            className="p-4 rounded-2xl bg-emerald-50/60 border-2 border-emerald-400 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-extrabold uppercase text-emerald-800">
+                                Edit Transaksi
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingTx(null)}
+                                className="text-xs text-slate-500 hover:text-slate-800"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                              <input
+                                type="date"
+                                value={editingTx.date}
+                                onChange={(e) => setEditingTx({ ...editingTx, date: e.target.value })}
+                                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
+                                required
+                              />
+                              <select
+                                value={editingTx.type}
+                                onChange={(e) => {
+                                  const t = e.target.value;
+                                  setEditingTx({
+                                    ...editingTx,
+                                    type: t,
+                                    category: categories[t]?.[0] || ''
+                                  });
+                                }}
+                                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold"
+                              >
+                                <option value="expense">Pengeluaran</option>
+                                <option value="income">Pemasukan</option>
+                                <option value="investment">Investasi</option>
+                              </select>
+                              <select
+                                value={editingTx.category}
+                                onChange={(e) => setEditingTx({ ...editingTx, category: e.target.value })}
+                                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
+                              >
+                                {(categories[editingTx.type] || []).map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                value={editingTx.amount}
+                                onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })}
+                                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold"
+                                placeholder="Nominal Rp"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={editingTx.note}
+                                onChange={(e) => setEditingTx({ ...editingTx, note: e.target.value })}
+                                className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
+                                placeholder="Keterangan transaksi..."
+                              />
+                              <button
+                                type="submit"
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                <span>Simpan</span>
+                              </button>
+                            </div>
+                          </form>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={tx.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-slate-300 transition-all"
+                        >
+                          <div className="flex items-start sm:items-center gap-3">
+                            <div
+                              className={`p-2.5 rounded-xl shrink-0 ${
+                                isIncome
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : isInvestment
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}
+                            >
+                              {isIncome ? (
+                                <ArrowUpRight className="w-4 h-4" />
+                              ) : isInvestment ? (
+                                <PiggyBank className="w-4 h-4" />
+                              ) : (
+                                <ArrowDownRight className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-bold text-slate-900">{tx.note}</span>
+                                <span
+                                  className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                                    isIncome
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : isInvestment
+                                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                      : 'bg-slate-200/70 text-slate-700'
+                                  }`}
+                                >
+                                  {tx.category}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <Calendar className="w-3 h-3" />
+                                <span>{tx.date}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0">
+                            <span
+                              className={`text-sm font-extrabold ${
+                                isIncome
+                                  ? 'text-emerald-600'
+                                  : isInvestment
+                                  ? 'text-blue-600'
+                                  : 'text-rose-600'
+                              }`}
+                            >
+                              {isIncome ? '+' : '-'}
+                              {formatRupiah(tx.amount)}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setEditingTx({ ...tx })}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                title="Edit Transaksi"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTransaction(tx.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Hapus Transaksi"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 3: KALKULATOR FINANCIAL FREEDOM USIA 45 ================= */}
+        {activeTab === 'fire' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Panel Konfigurasi Parameter Lengkap */}
+            <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-emerald-600" />
+                  Edit Parameter & Target Kebebasan Finansial
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Semua angka di bawah ini dapat diedit sesuai kondisi dan target Anda
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {/* Usia Saat Ini & Target Usia */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <label className="text-xs font-semibold text-slate-500 block">Usia Saat Ini</label>
+                    <div className="flex items-center justify-between mt-1">
+                      <input
+                        type="number"
+                        min={18}
+                        max={75}
+                        value={fireConfig.currentAge}
+                        onChange={(e) =>
+                          setFireConfig({ ...fireConfig, currentAge: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent text-lg font-extrabold text-slate-900 focus:outline-none"
+                      />
+                      <span className="text-xs font-bold text-slate-400">Thn</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-300">
+                    <label className="text-xs font-bold text-emerald-700 block">Target Usia Merdeka</label>
+                    <div className="flex items-center justify-between mt-1">
+                      <input
+                        type="number"
+                        min={fireConfig.currentAge + 1}
+                        max={85}
+                        value={fireConfig.targetAge}
+                        onChange={(e) =>
+                          setFireConfig({ ...fireConfig, targetAge: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent text-lg font-extrabold text-emerald-700 focus:outline-none"
+                      />
+                      <span className="text-xs font-bold text-emerald-600">Thn</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mode Penentuan Target FIRE: Otomatis (25x Pengeluaran) vs Manual Target */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">Metode Target Dana FIRE</span>
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setFireConfig({ ...fireConfig, useCustomTarget: false })}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          !fireConfig.useCustomTarget ? 'bg-emerald-600 text-white' : 'text-slate-600'
+                        }`}
+                      >
+                        Otomatis (SWR)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFireConfig({ ...fireConfig, useCustomTarget: true })}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          fireConfig.useCustomTarget ? 'bg-emerald-600 text-white' : 'text-slate-600'
+                        }`}
+                      >
+                        Input Manual
+                      </button>
+                    </div>
+                  </div>
+
+                  {fireConfig.useCustomTarget ? (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">
+                        Masukkan Target Dana Financial Freedom Manual (Rp)
+                      </label>
+                      <input
+                        type="number"
+                        step={50000000}
+                        value={fireConfig.customFireTarget}
+                        onChange={(e) =>
+                          setFireConfig({ ...fireConfig, customFireTarget: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-extrabold text-emerald-700"
+                      />
+                      <span className="text-[11px] text-slate-500 mt-1 block">
+                        Terbaca: {formatCompactRupiah(fireConfig.customFireTarget)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-600 font-semibold">Biaya Hidup Pensiun Diinginkan</span>
+                        <span className="text-emerald-700 font-extrabold">
+                          {formatRupiah(fireConfig.monthlyRetirementExpense)} / bln
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60000000}
+                        step={500000}
+                        value={fireConfig.monthlyRetirementExpense}
+                        onChange={(e) =>
+                          setFireConfig({
+                            ...fireConfig,
+                            monthlyRetirementExpense: Number(e.target.value)
+                          })
+                        }
+                        className="w-full accent-emerald-600 cursor-pointer"
+                      />
+                      <span className="text-[11px] text-slate-500 block">
+                        Otomatis menghasilkan Target FIRE: <strong>{formatCompactRupiah(fireAnalysis.calculatedFireTarget)}</strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sumber Modal Aset Saat Ini: Dari Kantong Aset vs Input Manual */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">Modal Aset Saat Ini</span>
+                    <label className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fireConfig.syncPortfolioFromBuckets}
+                        onChange={(e) =>
+                          setFireConfig({
+                            ...fireConfig,
+                            syncPortfolioFromBuckets: e.target.checked
+                          })
+                        }
+                        className="rounded accent-emerald-600"
+                      />
+                      <span>Hitung dari Kantong Aset</span>
+                    </label>
+                  </div>
+
+                  {fireConfig.syncPortfolioFromBuckets ? (
+                    <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200">
+                      <span className="text-xs text-slate-500">Total Saldo Awal {goals.length} Kantong:</span>
+                      <span className="text-sm font-extrabold text-blue-600">
+                        {formatRupiah(bucketsTotals.totalBase)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="number"
+                        step={5000000}
+                        value={fireConfig.manualInitialPortfolio}
+                        onChange={(e) =>
+                          setFireConfig({
+                            ...fireConfig,
+                            manualInitialPortfolio: Number(e.target.value)
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-bold text-slate-900"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Investasi Rutin Bulanan */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-slate-700 font-bold">Rencana Setoran Investasi / Bulan</span>
+                    <span className="text-emerald-700 font-extrabold">
+                      {formatRupiah(fireConfig.monthlyContributionPlan)} / bln
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={40000000}
+                    step={500000}
+                    value={fireConfig.monthlyContributionPlan}
+                    onChange={(e) =>
+                      setFireConfig({
+                        ...fireConfig,
+                        monthlyContributionPlan: Number(e.target.value)
+                      })
+                    }
+                    className="w-full accent-emerald-600 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[11px] text-slate-400 mt-0.5">
+                    <span>Rp 0</span>
+                    <span>Rp 20 Juta</span>
+                    <span>Rp 40 Juta</span>
+                  </div>
+                </div>
+
+                {/* Asumsi Return, Inflasi & SWR */}
+                <div className="grid grid-cols-3 gap-2.5 pt-1">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <label className="text-[11px] font-semibold text-slate-500 block">Return / Thn (%)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="30"
+                      value={fireConfig.expectedAnnualReturn}
+                      onChange={(e) =>
+                        setFireConfig({
+                          ...fireConfig,
+                          expectedAnnualReturn: Number(e.target.value)
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-extrabold text-slate-900 mt-1 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <label className="text-[11px] font-semibold text-slate-500 block">Inflasi / Thn (%)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="15"
+                      value={fireConfig.inflationRate}
+                      onChange={(e) =>
+                        setFireConfig({ ...fireConfig, inflationRate: Number(e.target.value) })
+                      }
+                      className="w-full bg-transparent text-sm font-extrabold text-amber-600 mt-1 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <label className="text-[11px] font-semibold text-slate-500 block">Aturan SWR (%)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="2"
+                      max="10"
+                      value={fireConfig.safeWithdrawalRate}
+                      onChange={(e) =>
+                        setFireConfig({
+                          ...fireConfig,
+                          safeWithdrawalRate: Number(e.target.value)
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-extrabold text-emerald-700 mt-1 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2.5 pt-1 text-xs text-slate-600 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fireConfig.syncWithActualInvestment}
+                    onChange={(e) =>
+                      setFireConfig({
+                        ...fireConfig,
+                        syncWithActualInvestment: e.target.checked
+                      })
+                    }
+                    className="rounded accent-emerald-600 w-4 h-4"
+                  />
+                  <span>Tambahkan otomatis transaksi investasi bulan ini ({formatRupiah(cashflowSummary.investment)})</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Hasil Analisis & Grafik Detail */}
+            <div className="lg:col-span-7 space-y-5">
+              <div
+                className={`rounded-3xl p-5 sm:p-6 border ${
+                  fireAnalysis.isOnTrack
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-amber-50/80 border-amber-300'
+                }`}
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`p-3 rounded-2xl shrink-0 ${
+                      fireAnalysis.isOnTrack
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    {fireAnalysis.isOnTrack ? (
+                      <CheckCircle2 className="w-6 h-6" />
+                    ) : (
+                      <AlertCircle className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <span
+                      className={`text-xs font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        fireAnalysis.isOnTrack
+                          ? 'bg-emerald-200/80 text-emerald-900'
+                          : 'bg-amber-200/80 text-amber-900'
+                      }`}
+                    >
+                      {fireAnalysis.isOnTrack
+                        ? 'Status: ON TRACK (Target Tercapai)'
+                        : 'Status: PERLU PENAMBAHAN INVESTASI / TARGET'}
+                    </span>
+                    <h4 className="text-lg font-extrabold text-slate-900">
+                      {fireAnalysis.isOnTrack
+                        ? `Selamat! Anda diproyeksikan mencapai Financial Freedom pada usia ${fireConfig.targetAge} tahun.`
+                        : `Silakan atur target biaya hidup pensiun dan rencana setoran investasi Anda.`}
+                    </h4>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      {fireAnalysis.isOnTrack ? (
+                        <>
+                          Dengan investasi rutin <strong>{formatRupiah(fireConfig.monthlyContributionPlan)}/bulan</strong> dan return bersih <strong>{fireAnalysis.netAnnualReturnPct.toFixed(1)}%/tahun</strong>, total aset Anda di usia {fireConfig.targetAge} diproyeksikan mencapai <strong>{formatCompactRupiah(fireAnalysis.projectedAtTargetAge)}</strong> (melampaui target {formatCompactRupiah(fireAnalysis.fireNumberTarget)}).
+                        </>
+                      ) : (
+                        <>
+                          Proyeksi aset Anda di usia {fireConfig.targetAge} adalah <strong>{formatCompactRupiah(fireAnalysis.projectedAtTargetAge)}</strong> ({fireAnalysis.projectedAchievementPct.toFixed(1)}% dari target {formatCompactRupiah(fireAnalysis.fireNumberTarget)}). Agar tercapai 100%, Anda disarankan menginvestasikan total <strong>{formatRupiah(fireAnalysis.requiredMonthlyContribution)}/bulan</strong> (tambah <strong>{formatRupiah(fireAnalysis.monthlyShortfall)}/bulan</strong>).
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
+                  <span className="text-xs font-semibold text-slate-500">Angka FIRE (Target 100%)</span>
+                  <div className="text-lg font-extrabold text-slate-900 mt-1">
+                    {formatCompactRupiah(fireAnalysis.fireNumberTarget)}
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    {fireConfig.useCustomTarget ? 'Target Manual Kustom' : `${(100 / fireConfig.safeWithdrawalRate).toFixed(0)}x pengeluaran tahunan`}
+                  </span>
+                </div>
+
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
+                  <span className="text-xs font-semibold text-slate-500">Setoran Wajib / Bulan</span>
+                  <div className="text-lg font-extrabold text-emerald-600 mt-1">
+                    {formatRupiah(fireAnalysis.requiredMonthlyContribution)}
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Selama {fireAnalysis.yearsToGrow} tahun ke depan
+                  </span>
+                </div>
+
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
+                  <span className="text-xs font-semibold text-slate-500">Hasil Pasif Usia {fireConfig.targetAge}</span>
+                  <div className="text-lg font-extrabold text-blue-600 mt-1">
+                    {formatRupiah(fireAnalysis.estimatedMonthlyPassiveIncome)}/bln
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Tanpa mengurangi pokok aset
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm">
+                <h4 className="text-sm font-extrabold text-slate-900 mb-1">
+                  Grafik Akumulasi Kekayaan per Usia
+                </h4>
+                <p className="text-xs text-slate-500 mb-4">
+                  Perbandingan antara modal yang Anda tabung vs hasil bunga berbunga (compounding)
+                </p>
+
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={fireAnalysis.projectionData} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="age" stroke="#64748b" fontSize={11} />
+                      <YAxis
+                        stroke="#64748b"
+                        fontSize={11}
+                        tickFormatter={(val) => `${(val / 1_000_000_000).toFixed(1)}M`}
+                      />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderColor: '#cbd5e1',
+                          borderRadius: '12px',
+                          fontSize: '12px'
+                        }}
+                        formatter={(val, name) => [
+                          formatRupiah(val),
+                          name === 'modalPokok' ? 'Modal Pokok Disetor' : 'Total Aset + Hasil Investasi'
+                        ]}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                        formatter={(val) =>
+                          val === 'modalPokok' ? 'Modal Pokok Disetor' : 'Total Nilai Portofolio'
+                        }
+                      />
+                      <Bar dataKey="modalPokok" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="totalAset" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 4: GO LAUNCH (SCRIPT DEPLOY WEB & BUILD APK ANDROID) ================= */}
+        {activeTab === 'launch' && (
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-700">
+                    <Rocket className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      Panduan & Script Go-Launching (Web App & Android APK)
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                      Gunakan script siap pakai di bawah ini untuk mengonlinekan aplikasi FinFreedom 45 ke domain web atau membungkusnya menjadi file instalasi Android (<strong>.APK / .AAB</strong>).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                {/* 1. Setup Vite + React Lokal */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-5 h-5 text-emerald-600" />
+                        <h4 className="text-sm font-extrabold text-slate-900">
+1. Setup Project di Komputer (Vite + React)
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => handleCopyScript('vite', LAUNCH_SCRIPTS.viteSetup)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 transition-colors"
+                      >
+                        {copiedKey === 'vite' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'vite' ? 'Tersalin' : 'Copy Script'}</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Jalankan perintah ini di Terminal / Command Prompt, lalu tempel kode file <code>App.jsx</code> ini ke dalam folder <code>src/App.jsx</code>.
+                    </p>
+                    <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto leading-relaxed font-mono">
+                      {LAUNCH_SCRIPTS.viteSetup}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* 2. Build APK Android dengan CapacitorJS */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="w-5 h-5 text-blue-600" />
+                        <h4 className="text-sm font-extrabold text-slate-900">
+2. Konversi Jadi Aplikasi Android (.APK)
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => handleCopyScript('apk', LAUNCH_SCRIPTS.capacitorApk)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors"
+                      >
+                        {copiedKey === 'apk' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'apk' ? 'Tersalin' : 'Copy Script'}</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Menggunakan <strong>CapacitorJS</strong> resmi agar aplikasi berjalan native di HP Android secara offline dan mendukung penyimpanan lokal permanen.
+                    </p>
+                    <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto leading-relaxed font-mono">
+                      {LAUNCH_SCRIPTS.capacitorApk}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* 3. Deploy Gratis ke Web (Vercel) */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-5 h-5 text-teal-600" />
+                        <h4 className="text-sm font-extrabold text-slate-900">
+3. Go-Live ke Web Hosting Gratis (Vercel)
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => handleCopyScript('vercel', LAUNCH_SCRIPTS.vercelDeploy)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 transition-colors"
+                      >
+                        {copiedKey === 'vercel' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'vercel' ? 'Tersalin' : 'Copy Script'}</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Onlinekan dalam 1 menit agar bisa diakses dari browser HP maupun laptop dari mana saja.
+                    </p>
+                    <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto leading-relaxed font-mono">
+                      {LAUNCH_SCRIPTS.vercelDeploy}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* 4. Progressive Web App (PWA) Manifest */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        <h4 className="text-sm font-extrabold text-slate-900">
+4. Install Langsung Tanpa Play Store (PWA Manifest)
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => handleCopyScript('pwa', LAUNCH_SCRIPTS.pwaManifest)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-700 border border-slate-200 transition-colors"
+                      >
+                        {copiedKey === 'pwa' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'pwa' ? 'Tersalin' : 'Copy JSON'}</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Simpan sebagai <code>public/manifest.json</code> agar saat dibuka di Chrome Android / Safari iOS muncul tombol <strong>"Tambahkan ke Layar Utama"</strong>.
+                    </p>
+                    <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto leading-relaxed font-mono">
+                      {LAUNCH_SCRIPTS.pwaManifest}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ================= MODAL 1: TAMBAH / EDIT KANTONG ASET ================= */}
+      {goalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 no-print">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900">
+                {goalForm.id ? 'Edit Kantong Aset & Target' : 'Tambah Kantong Aset Baru'}
+              </h3>
+              <button
+                onClick={() => setGoalModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGoalForm} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nama Instrumen / Kantong Aset</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Portofolio Saham Dividen / Kos-kosan"
+                  value={goalForm.name}
+                  onChange={(e) => setGoalForm({ ...goalForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Kategori Transaksi</label>
+                  <select
+                    value={goalForm.category}
+                    onChange={(e) => setGoalForm({ ...goalForm, category: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900"
+                  >
+                    {(categories.investment || []).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Pilih Ikon</label>
+                  <select
+                    value={goalForm.icon}
+                    onChange={(e) => setGoalForm({ ...goalForm, icon: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900"
+                  >
+                    <option value="trending">Grafik Saham</option>
+                    <option value="building">Properti / Kos</option>
+                    <option value="shield">Dana Darurat</option>
+                    <option value="landmark">Obligasi / Bank</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Nilai Aset Saat Ini / Saldo Awal (Rp)
+                </label>
+                <input
+                  type="number"
+                  placeholder="Contoh: 100000000"
+                  value={goalForm.currentBase}
+                  onChange={(e) => setGoalForm({ ...goalForm, currentBase: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900"
+                  required
+                />
+                {goalForm.currentBase > 0 && (
+                  <span className="text-[11px] text-emerald-600 font-semibold mt-0.5 block">
+                    {formatRupiah(Number(goalForm.currentBase))}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Target Dana Kantong Ini (Rp)
+                </label>
+                <input
+                  type="number"
+                  placeholder="Contoh: 1000000000"
+                  value={goalForm.target}
+                  onChange={(e) => setGoalForm({ ...goalForm, target: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900"
+                  required
+                />
+                {goalForm.target > 0 && (
+                  <span className="text-[11px] text-blue-600 font-semibold mt-0.5 block">
+                    {formatRupiah(Number(goalForm.target))}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Rencana Top-Up Rutin Bulanan (Rp)
+                </label>
+                <input
+                  type="number"
+                  placeholder="Contoh: 2500000"
+                  value={goalForm.monthlyPlan}
+                  onChange={(e) => setGoalForm({ ...goalForm, monthlyPlan: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setGoalModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  Simpan Kantong Aset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 2: QUICK EDIT TARGET & ASET SAAT INI ================= */}
+      {quickEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 no-print">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Edit Cepat Target Financial Freedom & Aset Saat Ini
+                </h3>
+                <p className="text-xs text-slate-500">Sesuaikan langsung angka utama rencana pensiun Anda</p>
+              </div>
+              <button
+                onClick={() => setQuickEditModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Usia Anda Saat Ini</label>
+                  <input
+                    type="number"
+                    value={fireConfig.currentAge}
+                    onChange={(e) => setFireConfig({ ...fireConfig, currentAge: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-emerald-700 block mb-1">Target Usia Financial Freedom</label>
+                  <input
+                    type="number"
+                    value={fireConfig.targetAge}
+                    onChange={(e) => setFireConfig({ ...fireConfig, targetAge: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-sm font-bold text-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>Gunakan Nominal Target FIRE Manual?</span>
+                  <input
+                    type="checkbox"
+                    checked={fireConfig.useCustomTarget}
+                    onChange={(e) => setFireConfig({ ...fireConfig, useCustomTarget: e.target.checked })}
+                    className="rounded accent-emerald-600 w-4 h-4"
+                  />
+                </label>
+
+                {fireConfig.useCustomTarget ? (
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Target Dana Pensiun Merdeka Manual (Rp)</label>
+                    <input
+                      type="number"
+                      value={fireConfig.customFireTarget}
+                      onChange={(e) => setFireConfig({ ...fireConfig, customFireTarget: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-extrabold text-emerald-700"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">
+                      Target Biaya Hidup Bulanan Saat Pensiun (Otomatis 25x Tahunan)
+                    </label>
+                    <input
+                      type="number"
+                      value={fireConfig.monthlyRetirementExpense}
+                      onChange={(e) => setFireConfig({ ...fireConfig, monthlyRetirementExpense: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-extrabold text-slate-900"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>Hitung Aset Saat Ini dari Daftar Kantong Aset?</span>
+                  <input
+                    type="checkbox"
+                    checked={fireConfig.syncPortfolioFromBuckets}
+                    onChange={(e) => setFireConfig({ ...fireConfig, syncPortfolioFromBuckets: e.target.checked })}
+                    className="rounded accent-emerald-600 w-4 h-4"
+                  />
+                </label>
+                {!fireConfig.syncPortfolioFromBuckets ? (
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Masukkan Total Aset Saat Ini Secara Manual (Rp)</label>
+                    <input
+                      type="number"
+                      value={fireConfig.manualInitialPortfolio}
+                      onChange={(e) => setFireConfig({ ...fireConfig, manualInitialPortfolio: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-extrabold text-blue-700"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Saat ini dihitung otomatis dari <strong>{goals.length} Kantong Aset</strong> sebesar <strong>{formatRupiah(bucketsTotals.totalBase)}</strong>.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Rencana Investasi Rutin per Bulan (Rp)</label>
+                <input
+                  type="number"
+                  value={fireConfig.monthlyContributionPlan}
+                  onChange={(e) => setFireConfig({ ...fireConfig, monthlyContributionPlan: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setQuickEditModalOpen(false);
+                  showToast('Pengaturan Target & Aset berhasil disimpan!');
+                }}
+                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md"
+              >
+                Selesai & Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: LAPORAN SIAP CETAK / EXPORT PDF (A4) ================= */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl my-8 max-h-[92vh] overflow-y-auto">
+            {/* Toolbar Modal */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-6 border-b border-slate-200 no-print">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">Pratinjau Laporan PDF / Cetak A4</h3>
+                <p className="text-xs text-slate-500">Klik tombol "Cetak / Simpan PDF" lalu pilih "Save as PDF" pada dialog printer</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak / Simpan PDF</span>
+                </button>
+                <button
+                  onClick={handleExportExcelXLS}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Download Excel</span>
+                </button>
+                <button
+                  onClick={() => setReportModalOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Isi Laporan yang Tercetak di Kertas / PDF */}
+            <div className="space-y-6 text-slate-900">
+              <div className="flex items-start justify-between border-b-2 border-emerald-600 pb-4">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-slate-900">
+                    LAPORAN KEUANGAN & ROADMAP FINANCIAL FREEDOM USIA {fireConfig.targetAge}
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Dicetak melalui Aplikasi FinFreedom {fireConfig.targetAge} pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800">
+                    {fireAnalysis.isOnTrack ? 'STATUS: ON TRACK' : 'PERLU TAMBAHAN INVESTASI'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Ringkasan Eksekutif */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 print-break-inside">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Target Dana Merdeka (Usia {fireConfig.targetAge})</span>
+                  <strong className="text-sm font-extrabold text-slate-900">{formatRupiah(fireAnalysis.fireNumberTarget)}</strong>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Total Aset Saat Ini ({fireAnalysis.progressPercentage.toFixed(1)}%)</span>
+                  <strong className="text-sm font-extrabold text-emerald-700">{formatRupiah(fireAnalysis.currentTotalInvested)}</strong>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Proyeksi Aset Usia {fireConfig.targetAge}</span>
+                  <strong className="text-sm font-extrabold text-blue-700">{formatRupiah(fireAnalysis.projectedAtTargetAge)}</strong>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Savings Rate Bulan Ini</span>
+                  <strong className="text-sm font-extrabold text-slate-900">{cashflowSummary.savingsRate.toFixed(1)}%</strong>
+                </div>
+              </div>
+
+              {/* Tabel Kantong Aset */}
+              <div className="print-break-inside">
+                <h4 className="text-sm font-extrabold text-slate-900 mb-2">A. Portofolio Kantong Aset & Target Investasi</h4>
+                <table className="w-full text-left border-collapse border border-slate-300 text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800">
+                      <th className="border border-slate-300 p-2">Nama Kantong Aset</th>
+                      <th className="border border-slate-300 p-2">Kategori</th>
+                      <th className="border border-slate-300 p-2 text-right">Aset Saat Ini</th>
+                      <th className="border border-slate-300 p-2 text-right">Target Goal</th>
+                      <th className="border border-slate-300 p-2 text-right">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {goals.map((g) => {
+                      const added = cashflowSummary.investmentByCategory[g.category] || 0;
+                      const total = (Number(g.currentBase) || 0) + added;
+                      const pct = (Number(g.target) > 0 ? (total / Number(g.target)) * 100 : 0).toFixed(1);
+                      return (
+                        <tr key={g.id}>
+                          <td className="border border-slate-300 p-2 font-semibold">{g.name}</td>
+                          <td className="border border-slate-300 p-2">{g.category}</td>
+                          <td className="border border-slate-300 p-2 text-right font-bold">{formatRupiah(total)}</td>
+                          <td className="border border-slate-300 p-2 text-right">{formatRupiah(g.target)}</td>
+                          <td className="border border-slate-300 p-2 text-right font-bold text-emerald-700">{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Tabel Ringkasan Transaksi */}
+              <div className="print-break-inside">
+                <h4 className="text-sm font-extrabold text-slate-900 mb-2">
+                  B. Riwayat Transaksi Kas & Investasi ({transactions.length} Transaksi)
+                </h4>
+                <table className="w-full text-left border-collapse border border-slate-300 text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800">
+                      <th className="border border-slate-300 p-2">Tanggal</th>
+                      <th className="border border-slate-300 p-2">Tipe</th>
+                      <th className="border border-slate-300 p-2">Kategori</th>
+                      <th className="border border-slate-300 p-2">Catatan</th>
+                      <th className="border border-slate-300 p-2 text-right">Nominal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="border border-slate-300 p-4 text-center text-slate-400">
+                          Belum ada transaksi tercatat (Rp 0)
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((t) => (
+                        <tr key={t.id}>
+                          <td className="border border-slate-300 p-2">{t.date}</td>
+                          <td className="border border-slate-300 p-2">
+                            {t.type === 'income' ? 'Pemasukan' : t.type === 'investment' ? 'Investasi' : 'Pengeluaran'}
+                          </td>
+                          <td className="border border-slate-300 p-2">{t.category}</td>
+                          <td className="border border-slate-300 p-2">{t.note}</td>
+                          <td className="border border-slate-300 p-2 text-right font-semibold">{formatRupiah(t.amount)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
+// RENDER APLIKASI KE DALAM HTML
+// ---------------------------------------------------------
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);
+    </script>
+</body>
+</html>
